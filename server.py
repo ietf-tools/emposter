@@ -2,7 +2,11 @@
 #
 
 import asyncio
-from aiosmtpd.smtp import Envelope as SMTPEnvelope, Session as SMTPSession, SMTP as SMTPServer
+from aiosmtpd.smtp import (
+    Envelope as SMTPEnvelope,
+    Session as SMTPSession,
+    SMTP as SMTPServer,
+)
 from aiosmtpd.lmtp import LMTP as LMTPServer
 from contextlib import suppress
 from functools import partial
@@ -12,22 +16,22 @@ import signal
 
 class DatatrackerHandler:
     async def handle_RCPT(
-            self,
-            server: SMTPServer,
-            session: SMTPSession,
-            envelope: SMTPEnvelope,
-            address: str,
-            rcpt_options: [str],
+        self,
+        server: SMTPServer,
+        session: SMTPSession,
+        envelope: SMTPEnvelope,
+        address: str,
+        rcpt_options: [str],
     ):
         print(f">> Received msg for {address}")
         envelope.rcpt_tos.append(address)
         return "250 OK"
 
     async def handle_DATA(
-            self,
-            server: SMTPServer,
-            session: SMTPSession,
-            envelope: SMTPEnvelope,
+        self,
+        server: SMTPServer,
+        session: SMTPSession,
+        envelope: SMTPEnvelope,
     ):
         print(f"Message from {envelope.mail_from}")
         print(f"Message for {envelope.rcpt_tos}")
