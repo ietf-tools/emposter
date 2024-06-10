@@ -65,11 +65,11 @@ def main():
         loop.run_forever()
 
     # shut down and clean up
-    log.debug("Exited event loop. Stopping server loop.")
+    log.debug("Exited main event loop")
     server_loop.close()
     loop.run_until_complete(server_loop.wait_closed())
     loop.close()
-    log.debug("Server loop closed. Exiting.")
+    log.info("Stopped server")
 
 
 if __name__ == "__main__":
