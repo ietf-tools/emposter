@@ -58,7 +58,11 @@ def main():
     asyncio.set_event_loop(loop)
     server = loop.create_server(factory, host="", port="8025")
     server_loop = loop.run_until_complete(server)
-    loop.add_signal_handler(signal.SIGINT, loop.stop)
+
+    # Handle interrupt / term signals
+    for sig in [signal.SIGINT, signal.SIGTERM]:
+        loop.add_signal_handler(sig, loop.stop)
+
     with suppress(KeyboardInterrupt):
         loop.run_forever()
     server_loop.close()
