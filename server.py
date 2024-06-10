@@ -33,8 +33,9 @@ def main():
     smtp_log_level = os.environ.get("EMPOSTER_SMTP_LOG_LEVEL", "WARNING")
 
     # configure logging
-    logging.basicConfig(level=log_level.upper())
-    logging.getLogger("mail.log").setLevel(smtp_log_level)
+    logging.basicConfig(level=logging.ERROR)
+    log.setLevel(log_level.upper())
+    logging.getLogger("mail.log").setLevel(smtp_log_level.upper())
 
 
     # factory to generate an LMTPServer
