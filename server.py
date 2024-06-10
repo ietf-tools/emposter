@@ -6,6 +6,7 @@ from aiosmtpd.smtp import Envelope as SMTPEnvelope, Session as SMTPSession, SMTP
 from aiosmtpd.lmtp import LMTP as LMTPServer
 from contextlib import suppress
 from functools import partial
+import os
 import signal
 
 
@@ -38,16 +39,20 @@ class DatatrackerHandler:
 
 
 def main():
+    hostname = os.environ.get("EMPOSTER_HOSTNAME", "")
+
     # factory to generate an LMTPServer
     factory = partial(
         LMTPServer,
         DatatrackerHandler(),
         enable_SMTPUTF8=True,
+        hostname=hostname,
+        ident="emposter LMTP",
     )
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    server = loop.create_server(factory, host="localhost", port="8025")
+    server = loop.create_server(factory, host="", port="8025")
     server_loop = loop.run_until_complete(server)
     loop.add_signal_handler(signal.SIGINT, loop.stop)
     with suppress(KeyboardInterrupt):
