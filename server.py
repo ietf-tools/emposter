@@ -60,7 +60,7 @@ class DatatrackerHandler:
             # have already validated the address TWICE...
             return None
         loc_addr, domain = addr_tuple[1].split("@", 1)
-        if domain != self.DOMAIN or loc_addr not in datatracker.DESTINATIONS:
+        if domain != self.DOMAIN:
             # We're being paranoid re-checking the domain, but just in case.
             return None
         return loc_addr
@@ -84,6 +84,7 @@ class DatatrackerHandler:
                 log.info(f"Rejecting message from {envelope.mail_from} to {addr} (invalid destination)")
                 response_lines.append("550 5.1.1 Error: invalid mailbox")
             log.debug(f"Posting message from {envelope.mail_from} to {dest} via Datatracker API")
+            # todo check result of POST!!
             datatracker.post_message(
                 dest=dest,
                 message=envelope.original_content,  # envelope.content is decoded, pass original bytes
