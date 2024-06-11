@@ -42,28 +42,31 @@ class DatatrackerHandler:
         rcpt_options: [str],
     ):
         """Validate recipient domain before accepting"""
-        addr_tuple = parseaddr(address)
-        if addr_tuple == ("", ""):
+        try:
+            loc_addr, domain = self._parse_destination(address)
+        except ValueError:
             # this really shouldn't happen, aiosmtpd has already validated the address
+            log.debug(f"Bad RCPT TO: {address}")
             return "553 5.1.3 Error: malformed address"
-        addr = addr_tuple[1]
-        if not addr.lower().endswith("@" + self.DOMAIN):
+        if domain != self.DOMAIN:
+            log.debug(f"Bad RCPT TO domain: {address}")
             return "550 5.7.1 Error: unsupported or missing domain"
+        if len(loc_addr) == 0:
+            log.debug(f"Empty RCPT TO destination: {address}")
+            return "550 5.1.1 Error: invalid mailbox"
         envelope.rcpt_tos.append(address)
         envelope.rcpt_options.extend(rcpt_options)
         return "250 OK"
 
-    def _parse_destination(self, address):
+    @staticmethod
+    def _parse_destination(address):
         addr_tuple = parseaddr(address.lower())
         if addr_tuple == ("", ""):
             # this really, REALLY shouldn't happen, aiosmtpd AND self.handle_RCPT
             # have already validated the address TWICE...
-            return None
+            raise ValueError()
         loc_addr, domain = addr_tuple[1].split("@", 1)
-        if domain != self.DOMAIN:
-            # We're being paranoid re-checking the domain, but just in case.
-            return None
-        return loc_addr
+        return loc_addr, domain
 
     async def handle_DATA(
         self,
@@ -79,20 +82,36 @@ class DatatrackerHandler:
         #     must be one reply for each successful RCPT command.
         response_lines = []
         for addr in envelope.rcpt_tos:
-            dest = self._parse_destination(addr)
-            if dest is None:
-                log.info(f"Rejecting message from {envelope.mail_from} to {addr} (invalid destination)")
+            try:
+                dest, domain = self._parse_destination(addr)
+            except ValueError:
+                # warn - this address should not have been accepted in the first place
+                log.warning(f"Rejecting message from {envelope.mail_from} to {addr} (invalid destination)")
                 response_lines.append("550 5.1.1 Error: invalid mailbox")
+                continue
+
+            if domain != self.DOMAIN:
+                log.warning(f"Rejecting message from {envelope.mail_from} to {addr} (invalid domain)")
+                response_lines.append("550 5.7.1 Error: unsupported or missing domain")
+                continue
+
             log.debug(f"Posting message from {envelope.mail_from} to {dest} via Datatracker API")
-            # todo check result of POST!!
-            datatracker.post_message(
-                dest=dest,
-                message=envelope.original_content,  # envelope.content is decoded, pass original bytes
-                api_token=self.api_token,
-                base_url=self.api_base_url,
-            )
-            log.info(f"Accepted message from {envelope.mail_from} to {addr} (destination {dest})")
-            response_lines.append("250 Message accepted for delivery")
+            try:
+                datatracker.post_message(
+                    dest=dest,
+                    message=envelope.original_content,  # envelope.content is decoded, pass original bytes
+                    api_token=self.api_token,
+                    base_url=self.api_base_url,
+                )
+            except datatracker.BadDestinationError:
+                log.info(f"Permanently rejecting message from {envelope.mail_from} to {addr}")
+                response_lines.append("550 Message rejected")
+            except Exception as err:
+                log.error(f"Error processing message from {envelope.mail_from} to {addr}: {err}")
+                response_lines.append("451 Local error processing message")
+            else:
+                log.info(f"Accepted message from {envelope.mail_from} to {addr} (destination {dest})")
+                response_lines.append("250 Message accepted for delivery")
         return "\n".join(response_lines)
 
 

@@ -5,6 +5,16 @@ from typing import Optional
 from urllib import parse, request
 
 
+class ApiError(Exception):
+    """General API error"""
+    pass
+
+
+class BadDestinationError(ApiError):
+    """API error that should be treated as permanent"""
+    pass
+
+
 def post_message(
     dest: str,
     message: bytes,
@@ -22,7 +32,7 @@ def post_message(
     headers = {"Content-Type": "application/json; charset=UTF-8"}
     if api_token is not None:
         headers["X-Api-Key"] = api_token
-    request.urlopen(
+    result = request.urlopen(
         request.Request(
             url=url,
             method="POST",
@@ -30,3 +40,8 @@ def post_message(
             data=json.dumps(payload).encode("utf8"),
         ),
     )
+    if result.status == 400 and result.reason == "Invalid dest":
+        # bad address
+        raise BadDestinationError()
+    elif result.status != 200:
+        raise ApiError()
