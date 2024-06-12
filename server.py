@@ -86,16 +86,22 @@ class DatatrackerHandler:
                 dest, domain = self._parse_destination(addr)
             except ValueError:
                 # warn - this address should not have been accepted in the first place
-                log.warning(f"Rejecting message from {envelope.mail_from} to {addr} (invalid destination)")
+                log.warning(
+                    f"Rejecting message from {envelope.mail_from} to {addr} (invalid destination)"
+                )
                 response_lines.append("550 5.1.1 Error: invalid mailbox")
                 continue
 
             if domain != self.DOMAIN:
-                log.warning(f"Rejecting message from {envelope.mail_from} to {addr} (invalid domain)")
+                log.warning(
+                    f"Rejecting message from {envelope.mail_from} to {addr} (invalid domain)"
+                )
                 response_lines.append("550 5.7.1 Error: unsupported or missing domain")
                 continue
 
-            log.debug(f"Posting message from {envelope.mail_from} to {dest} via Datatracker API")
+            log.debug(
+                f"Posting message from {envelope.mail_from} to {dest} via Datatracker API"
+            )
             try:
                 datatracker.post_message(
                     dest=dest,
@@ -103,14 +109,24 @@ class DatatrackerHandler:
                     api_token=self.api_token,
                     base_url=self.api_base_url,
                 )
-            except (datatracker.BadDestinationError, datatracker.BadMessageError, datatracker.UnknownError):
-                log.info(f"Permanently rejecting message from {envelope.mail_from} to {addr}")
+            except (
+                datatracker.BadDestinationError,
+                datatracker.BadMessageError,
+                datatracker.UnknownError,
+            ):
+                log.info(
+                    f"Permanently rejecting message from {envelope.mail_from} to {addr}"
+                )
                 response_lines.append("550 Message rejected")
             except Exception as err:
-                log.error(f"Error processing message from {envelope.mail_from} to {addr}: {err}")
+                log.error(
+                    f"Error processing message from {envelope.mail_from} to {addr}: {err}"
+                )
                 response_lines.append("451 Local error processing message")
             else:
-                log.info(f"Accepted message from {envelope.mail_from} to {addr} (destination {dest})")
+                log.info(
+                    f"Accepted message from {envelope.mail_from} to {addr} (destination {dest})"
+                )
                 response_lines.append("250 Message accepted for delivery")
         return "\n".join(response_lines)
 

@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 
 class ApiError(Exception):
     """General API error"""
+
     pass
 
 
