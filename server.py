@@ -1,6 +1,8 @@
 # Copyright The IETF Trust 2024, All Rights Reserved
 #
+"""LMTP-to-HTTP API server"""
 
+import api
 import asyncio
 from aiosmtpd.smtp import (
     Envelope as SMTPEnvelope,
@@ -16,8 +18,6 @@ import os
 import signal
 import sys
 
-import datatracker
-
 
 # Exit codes
 EXIT_OK = 0
@@ -26,13 +26,12 @@ EXIT_USAGE_ERR = 2
 log = logging.getLogger("emposter")
 
 
-class DatatrackerHandler:
-    DOMAIN = "datatracker.ietf.internal"  # all lowercase
+class EmposterHandler:
     MAX_RCPT_TO = 100  # min required - https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.1.8
 
-    def __init__(self, api_token, api_base_url=None):
-        self.api_token = api_token
-        self.api_base_url = api_base_url
+    def __init__(self, domain, api):
+        self.domain = domain
+        self.api = api
 
     async def handle_RCPT(
         self,
@@ -49,14 +48,16 @@ class DatatrackerHandler:
             # this really shouldn't happen, aiosmtpd has already validated the address
             log.debug(f"Bad RCPT TO: {address}")
             return "553 5.1.3 Error: malformed address"
-        if domain != self.DOMAIN:
+        if domain != self.domain:
             log.debug(f"Bad RCPT TO domain: {address}")
             return "550 5.7.1 Error: unsupported or missing domain"
         if len(loc_addr) == 0:
             log.debug(f"Empty RCPT TO destination: {address}")
             return "550 5.1.1 Error: invalid mailbox"
         if len(envelope.rcpt_tos) >= self.MAX_RCPT_TO:
-            log.debug(f"Refusing RCPT TO: {address}, already have {len(envelope.rcpt_tos)} recipients")
+            log.debug(
+                f"Refusing RCPT TO: {address}, already have {len(envelope.rcpt_tos)} recipients"
+            )
             return "452 Too many recipients"
         envelope.rcpt_tos.append(address)
         envelope.rcpt_options.extend(rcpt_options)
@@ -94,20 +95,16 @@ class DatatrackerHandler:
         }  # addr -> dest
         responses: dict[str, str] = {}  # dest -> reply line
         for dest in set(dests.values()):
-            log.debug(
-                f"Posting message from {envelope.mail_from} to {dest} via Datatracker API"
-            )
+            log.debug(f"Posting message from {envelope.mail_from} to {dest} via API")
             try:
-                datatracker.post_message(
+                self.api.post_message(
                     dest=dest,
                     message=envelope.original_content,  # envelope.content is decoded, pass original bytes
-                    api_token=self.api_token,
-                    base_url=self.api_base_url,
                 )
             except (
-                datatracker.BadDestinationError,
-                datatracker.BadMessageError,
-                datatracker.UnknownError,
+                api.BadDestinationError,
+                api.BadMessageError,
+                api.UnknownError,
             ):
                 log.info(
                     f"Permanently rejecting message from {envelope.mail_from} to {dest}"
@@ -126,12 +123,27 @@ class DatatrackerHandler:
 
 
 def main():
+    api_flavor = os.environ.get("EMPOSTER_API_FLAVOR", "datatracker").lower()
+    allowed_mail_domain = os.environ.get("EMPOSTER_DOMAIN", None)
     hostname = os.environ.get("EMPOSTER_HOSTNAME", "")
     log_level = os.environ.get("EMPOSTER_LOG_LEVEL", "INFO")
     api_log_level = os.environ.get("EMPOSTER_API_LOG_LEVEL", "WARNING")
-    smtp_log_level = os.environ.get("EMPOSTER_SMTP_LOG_LEVEL", "WARNING")
+    mail_log_level = os.environ.get("EMPOSTER_MAIL_LOG_LEVEL", "WARNING")
     api_token = os.environ.get("EMPOSTER_API_TOKEN", None)
     api_base_url = os.environ.get("EMPOSTER_API_BASE_URL", None)
+
+    if api_flavor == "datatracker":
+        import datatracker
+        ApiClass = datatracker.DatatrackerApi
+    elif api_flavor == "mailarchive":
+        import mailarchive
+        ApiClass = mailarchive.MailarchiveApi
+    else:
+        sys.stderr.write(
+            f"Error: Unknown api flavor '{api_flavor}'. "
+            "EMPOSTER_API_FLAVOR must be 'datatracker' or 'mailarchive'.\n\n"
+        )
+        sys.exit(EXIT_USAGE_ERR)
 
     if api_token is None:
         sys.stderr.write(
@@ -139,18 +151,21 @@ def main():
         )
         sys.exit(EXIT_USAGE_ERR)
 
+    if allowed_mail_domain is None:
+        allowed_mail_domain = f"{api_flavor}.ietf.internal"
+
     # configure logging
     logging.basicConfig(level=logging.ERROR)
     log.setLevel(log_level.upper())
-    logging.getLogger("datatracker").setLevel(api_log_level.upper())
-    logging.getLogger("mail.log").setLevel(smtp_log_level.upper())
+    logging.getLogger("api").setLevel(api_log_level.upper())
+    logging.getLogger("mail.log").setLevel(mail_log_level.upper())
 
     # factory to generate an LMTPServer
     factory = partial(
         LMTPServer,
-        DatatrackerHandler(
-            api_token=api_token,
-            api_base_url=api_base_url,
+        EmposterHandler(
+            domain=allowed_mail_domain,
+            api=ApiClass(token=api_token, base_url=api_base_url),
         ),
         enable_SMTPUTF8=True,
         hostname=hostname,
@@ -161,7 +176,7 @@ def main():
     log.debug("Creating event loop")
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    log.info("Starting server")
+    log.info(f"Starting server for @{allowed_mail_domain} using {api_flavor} API on {api_base_url}")
     server = loop.create_server(factory, host="", port="8025")
     server_loop = loop.run_until_complete(server)
 

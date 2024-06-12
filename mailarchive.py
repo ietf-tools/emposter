@@ -5,5 +5,5 @@ import logging
 log = logging.getLogger("api")
 
 
-class DatatrackerApi(api.Api):
-    default_base_url = "https://datatracker.ietf.org"
+class MailarchiveApi(api.Api):
+    default_base_url = "https://mailarchive.ietf.org"
