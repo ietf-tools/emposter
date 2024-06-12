@@ -80,25 +80,16 @@ class DatatrackerHandler:
         #     in the order that the RCPT commands were issued.  Even if there were
         #     multiple successful RCPT commands giving the same forward-path, there
         #     must be one reply for each successful RCPT command.
-        response_lines = []
-        for addr in envelope.rcpt_tos:
-            try:
-                dest, domain = self._parse_destination(addr)
-            except ValueError:
-                # warn - this address should not have been accepted in the first place
-                log.warning(
-                    f"Rejecting message from {envelope.mail_from} to {addr} (invalid destination)"
-                )
-                response_lines.append("550 5.1.1 Error: invalid mailbox")
-                continue
-
-            if domain != self.DOMAIN:
-                log.warning(
-                    f"Rejecting message from {envelope.mail_from} to {addr} (invalid domain)"
-                )
-                response_lines.append("550 5.7.1 Error: unsupported or missing domain")
-                continue
-
+        #
+        # Ensure we only POST once for each unique dest. Keep track of address -> dest map
+        # so we can correctly reply to the DATA command.
+        dests: dict[str, str] = {
+            # in handle_RCPT(), already confirmed that _parse_destination() likes the addr
+            addr: self._parse_destination(addr)[0]
+            for addr in envelope.rcpt_tos
+        }  # addr -> dest
+        responses: dict[str, str] = {}  # dest -> reply line
+        for dest in set(dests.values()):
             log.debug(
                 f"Posting message from {envelope.mail_from} to {dest} via Datatracker API"
             )
@@ -115,20 +106,19 @@ class DatatrackerHandler:
                 datatracker.UnknownError,
             ):
                 log.info(
-                    f"Permanently rejecting message from {envelope.mail_from} to {addr}"
+                    f"Permanently rejecting message from {envelope.mail_from} to {dest}"
                 )
-                response_lines.append("550 Message rejected")
+                responses[dest] = "550 Message rejected"
             except Exception as err:
                 log.error(
-                    f"Error processing message from {envelope.mail_from} to {addr}: {err}"
+                    f"Error processing message from {envelope.mail_from} to {dest}: {err}"
                 )
-                response_lines.append("451 Local error processing message")
+                responses[dest] = "451 Local error processing message"
             else:
-                log.info(
-                    f"Accepted message from {envelope.mail_from} to {addr} (destination {dest})"
-                )
-                response_lines.append("250 Message accepted for delivery")
-        return "\n".join(response_lines)
+                log.info(f"Accepted message from {envelope.mail_from} to {dest}")
+                responses[dest] = "250 Message accepted for delivery"
+        # Assemble the results in the original RCPT TO address order for our reply
+        return "\n".join(responses[dests[addr]] for addr in envelope.rcpt_tos)
 
 
 def main():
