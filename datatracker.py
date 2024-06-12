@@ -1,8 +1,11 @@
 # Copyright The IETF Trust 2024, All Rights Reserved
 import json
 from base64 import b64encode
+import logging
 from typing import Optional
 from urllib import parse, request
+
+log = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
@@ -11,7 +14,14 @@ class ApiError(Exception):
 
 
 class BadDestinationError(ApiError):
-    """API error that should be treated as permanent"""
+    pass
+
+
+class BadMessageError(ApiError):
+    pass
+
+
+class UnknownError(ApiError):
     pass
 
 
@@ -32,7 +42,7 @@ def post_message(
     headers = {"Content-Type": "application/json; charset=UTF-8"}
     if api_token is not None:
         headers["X-Api-Key"] = api_token
-    result = request.urlopen(
+    response = request.urlopen(
         request.Request(
             url=url,
             method="POST",
@@ -40,8 +50,20 @@ def post_message(
             data=json.dumps(payload).encode("utf8"),
         ),
     )
-    if result.status == 400 and result.reason == "Invalid dest":
-        # bad address
-        raise BadDestinationError()
-    elif result.status != 200:
+    log.debug(f"API responded with status {response.status}")
+    if response.status != 200:
         raise ApiError()
+
+    log.debug(f"Response Content-Type was {response.headers['Content-Type']}")
+    if response.headers["Content-Type"] != "application/json":
+        raise ApiError()
+
+    api_response = json.loads(response.read())
+    log.debug(f"API result was {api_response['result']}")
+    if api_response["result"] == "bad_dest":
+        raise BadDestinationError()
+    if api_response["result"] == "bad_msg":
+        raise BadMessageError()
+    if api_response["result"] != "ok":
+        raise UnknownError()
+    # if we got here, that meanssuccess!

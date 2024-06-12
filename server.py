@@ -103,7 +103,7 @@ class DatatrackerHandler:
                     api_token=self.api_token,
                     base_url=self.api_base_url,
                 )
-            except datatracker.BadDestinationError:
+            except (datatracker.BadDestinationError, datatracker.BadMessageError, datatracker.UnknownError):
                 log.info(f"Permanently rejecting message from {envelope.mail_from} to {addr}")
                 response_lines.append("550 Message rejected")
             except Exception as err:
@@ -118,9 +118,10 @@ class DatatrackerHandler:
 def main():
     hostname = os.environ.get("EMPOSTER_HOSTNAME", "")
     log_level = os.environ.get("EMPOSTER_LOG_LEVEL", "INFO")
+    api_log_level = os.environ.get("EMPOSTER_API_LOG_LEVEL", "WARNING")
     smtp_log_level = os.environ.get("EMPOSTER_SMTP_LOG_LEVEL", "WARNING")
     api_token = os.environ.get("EMPOSTER_API_TOKEN", None)
-    api_base_url = os.environ.get("EMPOSTER_API_BASE", None)
+    api_base_url = os.environ.get("EMPOSTER_API_BASE_URL", None)
 
     if api_token is None:
         sys.stderr.write(
@@ -131,6 +132,7 @@ def main():
     # configure logging
     logging.basicConfig(level=logging.ERROR)
     log.setLevel(log_level.upper())
+    logging.getLogger("datatracker").setLevel(api_log_level.upper())
     logging.getLogger("mail.log").setLevel(smtp_log_level.upper())
 
     # factory to generate an LMTPServer
