@@ -28,6 +28,7 @@ log = logging.getLogger("emposter")
 
 class DatatrackerHandler:
     DOMAIN = "datatracker.ietf.internal"  # all lowercase
+    MAX_RCPT_TO = 100  # min required - https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.1.8
 
     def __init__(self, api_token, api_base_url=None):
         self.api_token = api_token
@@ -54,6 +55,9 @@ class DatatrackerHandler:
         if len(loc_addr) == 0:
             log.debug(f"Empty RCPT TO destination: {address}")
             return "550 5.1.1 Error: invalid mailbox"
+        if len(envelope.rcpt_tos) >= self.MAX_RCPT_TO:
+            log.debug(f"Refusing RCPT TO: {address}, already have {len(envelope.rcpt_tos)} recipients")
+            return "452 Too many recipients"
         envelope.rcpt_tos.append(address)
         envelope.rcpt_options.extend(rcpt_options)
         return "250 OK"
