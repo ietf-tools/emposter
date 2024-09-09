@@ -11,13 +11,15 @@ log = logging.getLogger("api")
 class DatatrackerApi(api.Api):
     """API for posting messages to the datatracker"""
     default_base_url = "https://datatracker.ietf.org"
+    default_mail_subdomain = "datatracker"
+    post_message_endpoint = "api/email/"
 
     def post_message(self, dest: str, message: bytes) -> None:
         payload = {
             "dest": dest,
             "message": b64encode(message).decode(),
         }
-        url = parse.urljoin(self.base_url, "api/email/")
+        url = parse.urljoin(self.base_url, self.post_message_endpoint)
         response = self.post_with_auth(url, payload)
 
         log.debug(f"API responded with status {response.status}")
@@ -37,3 +39,8 @@ class DatatrackerApi(api.Api):
         if api_response["result"] != "ok":
             raise api.UnknownError()
         # if we got here, that means success!
+
+
+class DatatrackerTestApi(DatatrackerApi):
+    """API for testing message delivery to the datatracker"""
+    post_message_endpoint = "api/email/test/"

@@ -25,7 +25,8 @@ class UnknownError(ApiError):
 
 
 class Api:
-    default_base_url: str | None = None  # subclasses should fill this in
+    default_base_url: str  = "http://localhost/api"  # subclasses should fill this in
+    default_mail_subdomain: str  = "emposter"  # subclasses should fill this in
 
     def __init__(self, token: str, base_url: str | None):
         self.token = token

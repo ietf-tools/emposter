@@ -14,6 +14,7 @@ class MailarchiveApi(api.Api):
     Only supports public lists.
     """
     default_base_url = "https://mailarchive.ietf.org"
+    default_mail_subdomain = "mailarchive"
 
     def post_message(self, dest: str, message: bytes) -> None:
         payload = {

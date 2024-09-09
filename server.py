@@ -135,6 +135,9 @@ def main():
     if api_flavor == "datatracker":
         import datatracker
         ApiClass = datatracker.DatatrackerApi
+    elif api_flavor == "datatracker-test":
+        import datatracker
+        ApiClass = datatracker.DatatrackerTestApi
     elif api_flavor == "mailarchive":
         import mailarchive
         ApiClass = mailarchive.MailarchiveApi
@@ -152,7 +155,7 @@ def main():
         sys.exit(EXIT_USAGE_ERR)
 
     if allowed_mail_domain is None:
-        allowed_mail_domain = f"{api_flavor}.ietf.internal"
+        allowed_mail_domain = f"{ApiClass.default_mail_subdomain}.ietf.internal"
 
     # configure logging
     logging.basicConfig(level=logging.ERROR)
