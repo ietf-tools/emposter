@@ -25,6 +25,8 @@ EXIT_USAGE_ERR = 2
 
 log = logging.getLogger("emposter")
 
+DEFAULT_SERVER_PORT = 8025
+
 
 class EmposterHandler:
     MAX_RCPT_TO = 100  # min required - https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.3.1.8
@@ -126,6 +128,7 @@ def main():
     api_flavor = os.environ.get("EMPOSTER_API_FLAVOR", "datatracker").lower()
     allowed_mail_domain = os.environ.get("EMPOSTER_DOMAIN", None)
     hostname = os.environ.get("EMPOSTER_HOSTNAME", "")
+    server_port = os.environ.get("EMPOSTER_PORT", None)
     log_level = os.environ.get("EMPOSTER_LOG_LEVEL", "INFO")
     api_log_level = os.environ.get("EMPOSTER_API_LOG_LEVEL", "WARNING")
     mail_log_level = os.environ.get("EMPOSTER_MAIL_LOG_LEVEL", "WARNING")
@@ -154,6 +157,17 @@ def main():
         )
         sys.exit(EXIT_USAGE_ERR)
 
+    if server_port is None:
+        server_port = DEFAULT_SERVER_PORT
+    else:
+        try:
+            server_port = int(server_port)
+        except Exception:
+            sys.stderr.write(
+                f"Error: Invalid EMPOSTER_PORT value '{server_port}'"
+            )
+            sys.exit(EXIT_USAGE_ERR)
+
     if allowed_mail_domain is None:
         allowed_mail_domain = f"{ApiClass.default_mail_subdomain}.ietf.internal"
 
@@ -180,7 +194,7 @@ def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     log.info(f"Starting server for @{allowed_mail_domain} using {api_flavor} API on {api_base_url}")
-    server = loop.create_server(factory, host="", port="8025")
+    server = loop.create_server(factory, host="", port=str(server_port))
     server_loop = loop.run_until_complete(server)
 
     # Handle interrupt / term signals
